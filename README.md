@@ -28,10 +28,9 @@ Os padrões foram usados para manter o processamento extensível e separar respo
 
 ### Strategy
 
-[`TabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TabloideExtractor.java) define o contrato comum de extração. Atualmente existem duas estratégias:
+[`TabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TabloideExtractor.java) define o contrato comum de extração. A implementação disponível atualmente é:
 
-- [`LocalVisionTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/LocalVisionTabloideExtractor.java): estratégia principal, baseada no Ollama e em um modelo multimodal;
-- [`TesseractTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TesseractTabloideExtractor.java): alternativa experimental baseada em OCR tradicional e ajustada ao encarte de amostra.
+- [`LocalVisionTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/LocalVisionTabloideExtractor.java): estratégia baseada no Ollama e em um modelo multimodal.
 
 A estratégia ativa é escolhida por configuração, sem alterar o controller ou o serviço:
 
@@ -39,7 +38,7 @@ A estratégia ativa é escolhida por configuração, sem alterar o controller ou
 tabloide.extractor=local-vision
 ```
 
-Esse desenho segue o princípio **Open/Closed**: um novo extrator pode ser acrescentado implementando a interface, sem modificar o fluxo que o utiliza.
+Mesmo com uma única implementação concreta neste momento, o serviço depende da abstração. Esse desenho segue o princípio **Open/Closed**: um novo extrator pode ser acrescentado implementando a interface, sem modificar o fluxo que o utiliza.
 
 ### Facade
 
@@ -78,7 +77,6 @@ flowchart TD
     Controller --> Service[TabloideService / Facade]
     Service --> Contract{TabloideExtractor / Strategy}
     Contract --> Vision[LocalVisionTabloideExtractor]
-    Contract --> OCR[TesseractTabloideExtractor]
     Vision --> Adapter[OllamaVisionClient / Adapter]
     Adapter --> Ollama[Ollama + Qwen3-VL]
 ```
@@ -92,7 +90,6 @@ flowchart TD
 - Docker e Docker Compose
 - Ollama
 - Qwen3-VL 4B Instruct
-- Tess4J/Tesseract como estratégia alternativa
 - JUnit 5 e AssertJ
 
 ## Execução rápida com Docker Compose
@@ -239,12 +236,6 @@ TABLOIDE_OLLAMA_MODEL: qwen3-vl:4b-instruct
 ```
 
 `localhost` não deve ser usado entre containers: `ollama` é o nome do serviço na rede interna do Compose.
-
-Para experimentar a estratégia Tesseract, atualmente ajustada às coordenadas do encarte de amostra:
-
-```properties
-tabloide.extractor=tesseract
-```
 
 ## Testes
 

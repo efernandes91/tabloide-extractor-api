@@ -14,16 +14,12 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre-noble
 
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends tesseract-ocr \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system spring \
+RUN groupadd --system spring \
     && useradd --system --gid spring spring
 
 WORKDIR /app
 
 COPY --from=build --chown=spring:spring /workspace/target/tabloide-api-*.jar app.jar
-COPY --chown=spring:spring tessdata ./tessdata
 
 RUN chown spring:spring /app
 
