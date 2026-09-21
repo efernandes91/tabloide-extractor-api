@@ -94,12 +94,12 @@ flowchart TD
 
 ## Execução rápida com Docker Compose
 
-Este é o modo recomendado para testar o projeto. É necessário apenas ter o Docker Desktop ou Docker Engine com Compose instalado; Java, Maven e Ollama ficam dentro dos containers. Reserve aproximadamente 12 GB de espaço livre para imagens, dependências e o modelo.
+Este é o modo recomendado para testar o projeto. É necessário apenas ter o Docker Desktop ou Docker Engine com Compose instalado; Java, Maven e Ollama ficam dentro dos containers. Na primeira execução, reserve aproximadamente 25 a 30 GB de espaço livre para downloads, extração das imagens, dependências, cache e o modelo.
 
 ```powershell
 git clone https://github.com/efernandes91/tabloide-extractor-api.git
 cd tabloide-extractor-api
-docker compose up --build
+docker compose up --build -d
 ```
 
 O Compose executa automaticamente estas etapas:
@@ -111,13 +111,38 @@ O Compose executa automaticamente estas etapas:
 
 Na primeira execução são baixadas as imagens Docker e alguns gigabytes do modelo. O processo pode demorar, mas o modelo fica salvo no volume `ollama-data` e não precisa ser baixado novamente nas próximas inicializações.
 
-Quando aparecer `Tomcat started on port 8080`, a API estará disponível em `http://localhost:8080`.
+Para acompanhar o console do Spring Boot no IntelliJ ou em outro terminal:
+
+```powershell
+docker compose logs -f api
+```
+
+Como os containers foram iniciados com `-d`, `Ctrl+C` encerra apenas a visualização dos logs. A aplicação continua em execução.
+
+Quando aparecer `Tomcat started on port 8080`, abra `http://localhost:8080` no navegador ou execute:
+
+```powershell
+curl.exe "http://localhost:8080/"
+```
+
+Resposta esperada:
+
+```json
+{
+  "status": "UP",
+  "mensagem": "Tabloide Extractor API está em execução.",
+  "processamento": "POST /api/v1/tabloides/processar"
+}
+```
 
 Comandos úteis:
 
 ```powershell
 # Acompanhar a preparação do modelo e a API
 docker compose logs -f ollama-model-pull api
+
+# Iniciar novamente sem reconstruir as imagens
+docker compose up -d
 
 # Ver os serviços
 docker compose ps
@@ -160,6 +185,22 @@ curl.exe -X POST "http://localhost:8080/api/v1/tabloides/processar" -H "Accept: 
 O terminal da API mostra o progresso da leitura do cabeçalho e das regiões do tabloide.
 
 ## Endpoint
+
+### Status da API
+
+```http
+GET /
+```
+
+Retorna `200 OK` quando o servidor HTTP da API está em execução. Pode ser acessado diretamente pelo navegador e não inicia o processamento de um tabloide.
+
+```json
+{
+  "status": "UP",
+  "mensagem": "Tabloide Extractor API está em execução.",
+  "processamento": "POST /api/v1/tabloides/processar"
+}
+```
 
 ### Processar um tabloide
 
