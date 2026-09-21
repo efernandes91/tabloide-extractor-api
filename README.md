@@ -196,7 +196,15 @@ Com a API pronta e o terminal do Compose ainda aberto, execute em um segundo ter
 curl.exe -X POST "http://localhost:8080/api/v1/tabloides/processar" -H "Accept: application/json" -F "file=@samples/tabloide.png"
 ```
 
-O console do Compose mostra o progresso da leitura do cabeçalho e das regiões do tabloide.
+O console do Compose mostra a etapa atual, o percentual concluído e o tempo decorrido. Durante uma inferência longa, uma nova linha é exibida a cada 15 segundos, por exemplo:
+
+```text
+[5%] Lendo o cabeçalho do tabloide — 30s decorridos
+[20%] Lendo o cabeçalho do tabloide concluído em 1m12s
+[38%] Extraindo ofertas da região 1/4 concluído em 1m48s
+```
+
+O percentual representa etapas concluídas do pipeline, não tokens individuais do modelo. O Postman e o cURL continuam aguardando a resposta JSON final enquanto o progresso aparece no console.
 
 ## Endpoint
 
@@ -239,7 +247,7 @@ Para configurar manualmente:
 4. Crie a chave `file`, altere seu tipo de **Text** para **File** e escolha uma imagem PNG ou JPEG.
 5. Clique em **Send** e aguarde o processamento.
 
-Não adicione o cabeçalho `Content-Type` manualmente. O Postman gera o `multipart/form-data` com o `boundary` correto. Como a inferência em CPU pode levar vários minutos, configure **Request timeout in ms** como `600000` ou `0` em **Settings > General**.
+Não adicione o cabeçalho `Content-Type` manualmente. O Postman gera o `multipart/form-data` com o `boundary` correto. Como a inferência em CPU pode levar vários minutos, configure **Request timeout in ms** como `0` em **Settings > General** durante os testes locais.
 
 Exemplo resumido de resposta:
 
@@ -279,7 +287,7 @@ tabloide.extractor=local-vision
 tabloide.ollama.base-url=http://localhost:11434
 tabloide.ollama.model=qwen3-vl:4b-instruct
 tabloide.image.header-ratio=0.20
-tabloide.image.body-tiles=2
+tabloide.image.body-tiles=4
 tabloide.image.tile-overlap=0.12
 ```
 
@@ -298,12 +306,13 @@ TABLOIDE_OLLAMA_MODEL: qwen3-vl:4b-instruct
 mvn test
 ```
 
-A suíte cobre normalização de preços, sanitização das respostas do modelo, deduplicação das regiões sobrepostas, segmentação da imagem e inicialização do contexto Spring.
+A suíte cobre normalização de preços, sanitização das respostas do modelo, deduplicação das regiões sobrepostas, segmentação adaptativa, detecção de respostas truncadas e inicialização do contexto Spring.
 
 ## Decisões e aprendizados
 
 - Um único prompt para a imagem inteira perdeu precisão em textos pequenos. A solução foi separar o cabeçalho e dividir o corpo em regiões ampliadas e sobrepostas.
 - A sobreposição melhora a leitura nas bordas, mas pode repetir produtos. `OfferMerger` trata essas duplicidades.
+- Se uma região produzir conteúdo demais e atingir o limite de tokens, a API detecta `done_reason=length`, subdivide essa região e tenta novamente com partes menores. A quantidade de subdivisões é limitada para evitar repetição indefinida.
 - O modelo multimodal pode interpretar incorretamente nome, marca ou gramatura. Por isso a resposta é sanitizada e preserva `textoOriginal` para auditoria.
 - Preços normalizados permitem comparar embalagens diferentes, por exemplo `350 ml` e `2 l`.
 - Executar o modelo localmente mantém a imagem no computador e elimina custo por requisição, com o custo de maior tempo de processamento em CPU.

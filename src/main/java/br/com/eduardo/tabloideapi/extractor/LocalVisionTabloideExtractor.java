@@ -8,7 +8,10 @@ import br.com.eduardo.tabloideapi.dto.ValidadeResponse;
 import br.com.eduardo.tabloideapi.dto.VisionHeader;
 import br.com.eduardo.tabloideapi.dto.VisionOffer;
 import br.com.eduardo.tabloideapi.dto.VisionOffers;
+import br.com.eduardo.tabloideapi.exception.OllamaResponseTruncatedException;
+import br.com.eduardo.tabloideapi.exception.TabloideExtractionException;
 import br.com.eduardo.tabloideapi.image.TabloideImageSegmenter;
+import br.com.eduardo.tabloideapi.progress.ExtractionProgressLogger;
 import br.com.eduardo.tabloideapi.service.NormalizedPrice;
 import br.com.eduardo.tabloideapi.service.OfferMerger;
 import br.com.eduardo.tabloideapi.service.PriceNormalizer;
@@ -26,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -34,6 +38,7 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
     private static final Logger LOGGER = LoggerFactory.getLogger(LocalVisionTabloideExtractor.class);
 
     private static final DateTimeFormatter BRAZILIAN_DATE = DateTimeFormatter.ofPattern("dd/MM/uuuu");
+    private static final int MAX_SPLIT_DEPTH = 1;
 
     private static final String HEADER_PROMPT = """
             Leia somente o cabeçalho deste tabloide brasileiro.
@@ -113,6 +118,7 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
     private final OfferMerger offerMerger;
     private final VisionOfferSanitizer offerSanitizer;
     private final PriceNormalizer priceNormalizer;
+    private final ExtractionProgressLogger progressLogger;
     private final TabloideProperties.Ollama properties;
 
     public LocalVisionTabloideExtractor(
@@ -121,6 +127,7 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
             OfferMerger offerMerger,
             VisionOfferSanitizer offerSanitizer,
             PriceNormalizer priceNormalizer,
+            ExtractionProgressLogger progressLogger,
             TabloideProperties properties
     ) {
         this.ollamaClient = ollamaClient;
@@ -128,6 +135,7 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
         this.offerMerger = offerMerger;
         this.offerSanitizer = offerSanitizer;
         this.priceNormalizer = priceNormalizer;
+        this.progressLogger = progressLogger;
         this.properties = properties.ollama();
     }
 
@@ -138,39 +146,53 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
 
     @Override
     public TabloideResponse extract(BufferedImage image) {
-        LOGGER.info("Iniciando leitura do cabeçalho do tabloide");
-        VisionHeader header = ollamaClient.extract(
-                imageSegmenter.header(image),
-                HEADER_PROMPT,
-                HEADER_SCHEMA,
-                properties.headerMaxTokens(),
-                VisionHeader.class
+        String extractionId = UUID.randomUUID().toString().substring(0, 8);
+        long extractionStartedAt = System.nanoTime();
+        LOGGER.info(
+                "[{}] [0%] Processamento iniciado para imagem {}x{}",
+                extractionId,
+                image.getWidth(),
+                image.getHeight()
         );
 
+        VisionHeader header = extractHeader(image, extractionId);
+
         List<VisionOffer> extractedOffers = new ArrayList<>();
-
         List<BufferedImage> bodyTiles = imageSegmenter.bodyTiles(image);
-        for (int index = 0; index < bodyTiles.size(); index++) {
-            LOGGER.info("Extraindo ofertas da região {}/{}", index + 1, bodyTiles.size());
-            VisionOffers response = ollamaClient.extract(
-                    bodyTiles.get(index),
-                    OFFERS_PROMPT,
-                    OFFERS_SCHEMA,
-                    properties.offersMaxTokens(),
-                    VisionOffers.class
-            );
+        long regionsStartedAt = System.nanoTime();
 
-            if (response.ofertas() != null) {
-                response.ofertas().stream()
-                        .map(offerSanitizer::sanitize)
-                        .filter(this::isUseful)
-                        .forEach(extractedOffers::add);
+        try {
+            for (int index = 0; index < bodyTiles.size(); index++) {
+                int initialPercent = 20 + (75 * index / bodyTiles.size());
+                int completedPercent = 20 + (75 * (index + 1) / bodyTiles.size());
+                String region = "%d/%d".formatted(index + 1, bodyTiles.size());
+
+                extractedOffers.addAll(extractOffers(
+                        bodyTiles.get(index),
+                        extractionId,
+                        region,
+                        0,
+                        initialPercent,
+                        completedPercent
+                ));
+
+                int remainingRegions = bodyTiles.size() - index - 1;
+                if (remainingRegions > 0) {
+                    long averageRegionTime = (System.nanoTime() - regionsStartedAt) / (index + 1);
+                    LOGGER.info(
+                            "[{}] [{}%] Estimativa para as regiões restantes: aproximadamente {}",
+                            extractionId,
+                            completedPercent,
+                            ExtractionProgressLogger.formatElapsed(averageRegionTime * remainingRegions)
+                    );
+                }
             }
+        } finally {
+            bodyTiles.forEach(BufferedImage::flush);
         }
 
+        LOGGER.info("[{}] [95%] Consolidando, deduplicando e normalizando ofertas", extractionId);
         List<VisionOffer> offers = offerMerger.merge(extractedOffers);
-        LOGGER.info("Extração concluída: {} leituras, {} ofertas após deduplicação",
-                extractedOffers.size(), offers.size());
 
         Map<String, List<ProdutoResponse>> byCategory = offers.stream()
                 .collect(Collectors.groupingBy(
@@ -183,11 +205,117 @@ public class LocalVisionTabloideExtractor implements TabloideExtractor {
                 .map(entry -> new CategoriaResponse(entry.getKey(), List.copyOf(entry.getValue())))
                 .toList();
 
+        LOGGER.info(
+                "[{}] [100%] Extração concluída em {}: {} leituras, {} ofertas após deduplicação",
+                extractionId,
+                ExtractionProgressLogger.formatElapsed(System.nanoTime() - extractionStartedAt),
+                extractedOffers.size(),
+                offers.size()
+        );
+
         return new TabloideResponse(
                 trimToNull(header.mercado()),
                 new ValidadeResponse(parseDate(header.inicio()), parseDate(header.fim())),
                 categories
         );
+    }
+
+    private VisionHeader extractHeader(BufferedImage image, String extractionId) {
+        BufferedImage headerImage = imageSegmenter.header(image);
+        try {
+            return progressLogger.monitor(
+                    extractionId,
+                    5,
+                    20,
+                    "Lendo o cabeçalho do tabloide",
+                    () -> ollamaClient.extract(
+                            headerImage,
+                            HEADER_PROMPT,
+                            HEADER_SCHEMA,
+                            properties.headerMaxTokens(),
+                            VisionHeader.class
+                    )
+            );
+        } finally {
+            headerImage.flush();
+        }
+    }
+
+    private List<VisionOffer> extractOffers(
+            BufferedImage image,
+            String extractionId,
+            String region,
+            int splitDepth,
+            int initialPercent,
+            int completedPercent
+    ) {
+        try {
+            VisionOffers response = progressLogger.monitor(
+                    extractionId,
+                    initialPercent,
+                    completedPercent,
+                    "Extraindo ofertas da região " + region,
+                    () -> ollamaClient.extract(
+                            image,
+                            OFFERS_PROMPT,
+                            OFFERS_SCHEMA,
+                            properties.offersMaxTokens(),
+                            VisionOffers.class
+                    )
+            );
+
+            if (response.ofertas() == null) {
+                return List.of();
+            }
+
+            return response.ofertas().stream()
+                    .map(offerSanitizer::sanitize)
+                    .filter(this::isUseful)
+                    .toList();
+        } catch (OllamaResponseTruncatedException exception) {
+            if (splitDepth >= MAX_SPLIT_DEPTH) {
+                throw new TabloideExtractionException(
+                        "O Ollama não conseguiu concluir a região %s mesmo após subdividi-la"
+                                .formatted(region),
+                        exception
+                );
+            }
+
+            LOGGER.warn(
+                    "[{}] [{}%] A região {} atingiu o limite de tokens; subdividindo e tentando novamente",
+                    extractionId,
+                    initialPercent,
+                    region
+            );
+
+            List<BufferedImage> subdivisions = imageSegmenter.splitForRetry(image);
+            int midpoint = initialPercent + (completedPercent - initialPercent) / 2;
+            List<VisionOffer> offers = new ArrayList<>();
+
+            try {
+                offers.addAll(extractOffers(
+                        subdivisions.getFirst(),
+                        extractionId,
+                        region + ".1",
+                        splitDepth + 1,
+                        initialPercent,
+                        midpoint
+                ));
+                offers.addAll(extractOffers(
+                        subdivisions.getLast(),
+                        extractionId,
+                        region + ".2",
+                        splitDepth + 1,
+                        midpoint,
+                        completedPercent
+                ));
+                return List.copyOf(offers);
+            } finally {
+                subdivisions.forEach(BufferedImage::flush);
+            }
+        } finally {
+            image.flush();
+        }
     }
 
     private boolean isUseful(VisionOffer offer) {

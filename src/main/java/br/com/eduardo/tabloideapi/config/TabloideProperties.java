@@ -42,7 +42,7 @@ public record TabloideProperties(
         public Image {
             headerRatio = headerRatio == null ? 0.20 : headerRatio;
             headerScale = headerScale == null ? 3 : headerScale;
-            bodyTiles = bodyTiles == null ? 2 : bodyTiles;
+            bodyTiles = bodyTiles == null ? 4 : bodyTiles;
             tileOverlap = tileOverlap == null ? 0.12 : tileOverlap;
         }
     }

@@ -1,12 +1,15 @@
 package br.com.eduardo.tabloideapi.extractor;
 
 import br.com.eduardo.tabloideapi.config.TabloideProperties;
+import br.com.eduardo.tabloideapi.exception.OllamaResponseTruncatedException;
 import br.com.eduardo.tabloideapi.exception.TabloideExtractionException;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.UnexpectedEndOfInputException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -62,14 +65,35 @@ public class OllamaVisionClient {
                     .retrieve()
                     .body(OllamaResponse.class);
 
-            if (response == null
-                    || response.message() == null
+            if (response == null) {
+                throw new TabloideExtractionException("O Ollama retornou uma resposta vazia");
+            }
+
+            if (reachedTokenLimit(response, maxTokens)) {
+                throw new OllamaResponseTruncatedException(maxTokens, response.evalCount());
+            }
+
+            if (response.message() == null
                     || response.message().content() == null
                     || response.message().content().isBlank()) {
                 throw new TabloideExtractionException("O Ollama retornou uma resposta vazia");
             }
 
-            return objectMapper.readValue(response.message().content(), responseType);
+            try {
+                return objectMapper.readValue(response.message().content(), responseType);
+            } catch (JacksonException exception) {
+                if (exception instanceof UnexpectedEndOfInputException) {
+                    throw new OllamaResponseTruncatedException(
+                            maxTokens,
+                            response.evalCount(),
+                            exception
+                    );
+                }
+                throw new TabloideExtractionException(
+                        "O Ollama retornou um JSON inválido ou incompleto",
+                        exception
+                );
+            }
         } catch (RestClientException e) {
             throw new TabloideExtractionException(
                     "Não foi possível acessar o Ollama em " + properties.baseUrl(),
@@ -83,14 +107,22 @@ public class OllamaVisionClient {
         }
     }
 
+    private boolean reachedTokenLimit(OllamaResponse response, int maxTokens) {
+        if ("length".equalsIgnoreCase(response.doneReason())) {
+            return true;
+        }
+
+        return (response.doneReason() == null || response.doneReason().isBlank())
+                && response.evalCount() != null
+                && response.evalCount() >= maxTokens;
+    }
+
     private String toBase64(BufferedImage image) throws IOException {
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             if (!ImageIO.write(image, "png", output)) {
                 throw new IOException("Não foi possível codificar a imagem como PNG");
             }
             return Base64.getEncoder().encodeToString(output.toByteArray());
-        } finally {
-            image.flush();
         }
     }
 
@@ -119,7 +151,12 @@ public class OllamaVisionClient {
     ) {
     }
 
-    private record OllamaResponse(ResponseMessage message) {
+    private record OllamaResponse(
+            ResponseMessage message,
+            boolean done,
+            @JsonProperty("done_reason") String doneReason,
+            @JsonProperty("eval_count") Integer evalCount
+    ) {
     }
 
     private record ResponseMessage(String content) {

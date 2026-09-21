@@ -22,10 +22,23 @@ class TabloideImageSegmenterTests {
 
         assertThat(header.getWidth()).isEqualTo(1500);
         assertThat(header.getHeight()).isEqualTo(420);
-        assertThat(tiles).hasSize(2);
+        assertThat(tiles).hasSize(4);
         assertThat(tiles).allSatisfy(tile -> {
             assertThat(tile.getWidth()).isEqualTo(1000);
-            assertThat(tile.getHeight()).isGreaterThan(560);
+            assertThat(tile.getHeight()).isBetween(300, 360);
+        });
+    }
+
+    @Test
+    void subdivideRegiaoNoMaiorEixoComSobreposicao() {
+        BufferedImage region = new BufferedImage(1000, 400, BufferedImage.TYPE_INT_RGB);
+
+        List<BufferedImage> subdivisions = segmenter.splitForRetry(region);
+
+        assertThat(subdivisions).hasSize(2);
+        assertThat(subdivisions).allSatisfy(tile -> {
+            assertThat(tile.getWidth()).isEqualTo(580);
+            assertThat(tile.getHeight()).isEqualTo(400);
         });
     }
 }

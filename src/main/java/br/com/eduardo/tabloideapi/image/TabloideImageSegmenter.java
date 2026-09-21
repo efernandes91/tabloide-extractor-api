@@ -12,6 +12,8 @@ import java.util.List;
 @Component
 public class TabloideImageSegmenter {
 
+    private static final double RETRY_OVERLAP = 0.08;
+
     private final TabloideProperties.Image properties;
 
     public TabloideImageSegmenter(TabloideProperties properties) {
@@ -54,6 +56,42 @@ public class TabloideImageSegmenter {
         }
 
         return List.copyOf(tiles);
+    }
+
+    public List<BufferedImage> splitForRetry(BufferedImage image) {
+        if (image.getWidth() < 2 && image.getHeight() < 2) {
+            throw new IllegalArgumentException("A região é pequena demais para ser subdividida");
+        }
+
+        if (image.getWidth() >= image.getHeight() && image.getWidth() >= 2) {
+            int midpoint = image.getWidth() / 2;
+            int overlap = retryOverlap(image.getWidth(), midpoint);
+
+            return List.of(
+                    copyRegion(image, 0, 0, midpoint + overlap, image.getHeight()),
+                    copyRegion(
+                            image,
+                            midpoint - overlap,
+                            0,
+                            image.getWidth() - midpoint + overlap,
+                            image.getHeight()
+                    )
+            );
+        }
+
+        int midpoint = image.getHeight() / 2;
+        int overlap = retryOverlap(image.getHeight(), midpoint);
+
+        return List.of(
+                copyRegion(image, 0, 0, image.getWidth(), midpoint + overlap),
+                copyRegion(
+                        image,
+                        0,
+                        midpoint - overlap,
+                        image.getWidth(),
+                        image.getHeight() - midpoint + overlap
+                )
+        );
     }
 
     private int headerHeight(BufferedImage image) {
@@ -99,5 +137,10 @@ public class TabloideImageSegmenter {
 
     private double clamp(double value, double minimum, double maximum) {
         return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private int retryOverlap(int dimension, int midpoint) {
+        int requested = (int) Math.round(dimension * RETRY_OVERLAP);
+        return Math.min(Math.max(0, requested), Math.max(0, midpoint - 1));
     }
 }
