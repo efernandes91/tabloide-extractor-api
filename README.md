@@ -99,7 +99,7 @@ Este é o modo recomendado para testar o projeto. É necessário apenas ter o Do
 ```powershell
 git clone https://github.com/efernandes91/tabloide-extractor-api.git
 cd tabloide-extractor-api
-docker compose up --build -d
+docker compose up --build
 ```
 
 O Compose executa automaticamente estas etapas:
@@ -129,17 +129,9 @@ Os valores podem variar conforme a versão do Docker e a arquitetura do computad
 docker system df -v
 ```
 
-Na primeira execução são baixadas as imagens Docker e alguns gigabytes do modelo. O processo pode demorar, mas o modelo fica salvo no volume `ollama-data` e não precisa ser baixado novamente nas próximas inicializações.
+Na primeira execução são baixadas as imagens Docker e alguns gigabytes do modelo. O processo pode demorar, mas o modelo fica salvo no volume `ollama-data` e não precisa ser baixado novamente nas próximas inicializações. A mensagem `ollama-model-pull-1 exited with code 0` é esperada: ela indica que a preparação terminou e o modelo está disponível.
 
-Para acompanhar o console do Spring Boot no IntelliJ ou em outro terminal:
-
-```powershell
-docker compose logs -f api
-```
-
-Como os containers foram iniciados com `-d`, `Ctrl+C` encerra apenas a visualização dos logs. A aplicação continua em execução.
-
-Quando aparecer `Tomcat started on port 8080`, abra `http://localhost:8080` no navegador ou execute:
+O comando permanece anexado aos containers e mostra no próprio terminal os logs do Ollama e do Spring Boot. Quando aparecer `Tomcat started on port 8080`, mantenha esse terminal aberto e acesse `http://localhost:8080` no navegador. Para testar pelo cURL, abra um segundo terminal e execute:
 
 ```powershell
 curl.exe "http://localhost:8080/"
@@ -155,17 +147,19 @@ Resposta esperada:
 }
 ```
 
+Para encerrar a aplicação, volte ao terminal do Compose e pressione `Ctrl+C`. Os containers serão interrompidos, mas o modelo baixado continuará salvo no volume.
+
 Comandos úteis:
 
 ```powershell
-# Acompanhar a preparação do modelo e a API
-docker compose logs -f ollama-model-pull api
-
 # Iniciar novamente sem reconstruir as imagens
-docker compose up -d
+docker compose up
 
-# Ver os serviços
+# Ver os serviços em outro terminal
 docker compose ps
+
+# Acompanhar somente o console da API em outro terminal
+docker compose logs -f api
 
 # Ver o modelo durante uma inferência
 docker compose exec ollama ollama ps
@@ -196,13 +190,13 @@ Nesse modo, a API usa o Ollama em `http://localhost:11434`. Para observar o mode
 
 ## Teste rápido com cURL
 
-Com a API pronta, execute dentro da pasta do projeto:
+Com a API pronta e o terminal do Compose ainda aberto, execute em um segundo terminal, dentro da pasta do projeto:
 
 ```powershell
 curl.exe -X POST "http://localhost:8080/api/v1/tabloides/processar" -H "Accept: application/json" -F "file=@samples/tabloide.png"
 ```
 
-O terminal da API mostra o progresso da leitura do cabeçalho e das regiões do tabloide.
+O console do Compose mostra o progresso da leitura do cabeçalho e das regiões do tabloide.
 
 ## Endpoint
 
@@ -235,7 +229,7 @@ Content-Type: multipart/form-data
 
 ### Testar com Postman
 
-Uma coleção pronta está disponível em [`postman/Tabloide-Extractor-API.postman_collection.json`](postman/Tabloide-Extractor-API.postman_collection.json). Importe o arquivo no Postman, abra **Processar tabloide**, selecione a imagem no campo `file` e clique em **Send**.
+Com o terminal do Compose ainda aberto, importe no Postman a coleção disponível em [`postman/Tabloide-Extractor-API.postman_collection.json`](postman/Tabloide-Extractor-API.postman_collection.json). Abra **Processar tabloide**, selecione a imagem no campo `file` e clique em **Send**.
 
 Para configurar manualmente:
 
