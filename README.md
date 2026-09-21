@@ -94,7 +94,7 @@ flowchart TD
 
 ## Execução rápida com Docker Compose
 
-Este é o modo recomendado para testar o projeto. É necessário apenas ter o Docker Desktop ou Docker Engine com Compose instalado; Java, Maven e Ollama ficam dentro dos containers. Na primeira execução, reserve aproximadamente 25 a 30 GB de espaço livre para downloads, extração das imagens, dependências, cache e o modelo.
+Este é o modo recomendado para testar o projeto. É necessário apenas ter o Docker Desktop ou Docker Engine com Compose instalado; Java, Maven e Ollama ficam dentro dos containers. Na primeira execução são transferidos cerca de 7 a 8 GB. Depois do download e do build, o projeto ocupa aproximadamente 13 a 15 GB; recomenda-se ter 20 GB livres para uma instalação limpa.
 
 ```powershell
 git clone https://github.com/efernandes91/tabloide-extractor-api.git
@@ -108,6 +108,26 @@ O Compose executa automaticamente estas etapas:
 2. baixa o modelo `qwen3-vl:4b-instruct`;
 3. compila a API com Java 25;
 4. inicia o Spring Boot somente quando o modelo está disponível.
+
+### Espaço em disco
+
+A estimativa abaixo foi medida no Docker Desktop com WSL 2, Ollama `0.34.1` e o modelo `qwen3-vl:4b-instruct`:
+
+| Componente | Espaço aproximado |
+| --- | ---: |
+| Imagem do Ollama extraída | 9,2 GB |
+| Modelo no volume `ollama-data` | 3,3 GB |
+| Imagem da API | 0,5 GB |
+| Cache de compilação | 1,3 GB |
+| **Total após a preparação** | **14,3 GB** |
+
+A imagem do Ollama baixa cerca de 3,7 GB compactada e fica maior depois de extraída. Durante a primeira execução, o Docker pode manter temporariamente dados compactados e extraídos ao mesmo tempo, elevando o uso para cerca de 16 a 18 GB. A recomendação de 20 GB livres inclui uma margem para esse pico; não significa que o projeto consumirá permanentemente todo esse espaço. Os serviços `ollama` e `ollama-model-pull` compartilham a mesma imagem, portanto ela não é armazenada duas vezes.
+
+Os valores podem variar conforme a versão do Docker e a arquitetura do computador. Imagens, volumes e caches de outros projetos não estão incluídos nessa conta. Para conferir o consumo no seu ambiente:
+
+```powershell
+docker system df -v
+```
 
 Na primeira execução são baixadas as imagens Docker e alguns gigabytes do modelo. O processo pode demorar, mas o modelo fica salvo no volume `ollama-data` e não precisa ser baixado novamente nas próximas inicializações.
 
