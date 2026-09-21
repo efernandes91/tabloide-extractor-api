@@ -31,7 +31,7 @@ Os padrões foram usados para manter o processamento extensível e separar respo
 [`TabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TabloideExtractor.java) define o contrato comum de extração. Atualmente existem duas estratégias:
 
 - [`LocalVisionTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/LocalVisionTabloideExtractor.java): estratégia principal, baseada no Ollama e em um modelo multimodal;
-- [`TesseractTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TesseractTabloideExtractor.java): alternativa baseada em OCR tradicional.
+- [`TesseractTabloideExtractor`](src/main/java/br/com/eduardo/tabloideapi/extractor/TesseractTabloideExtractor.java): alternativa experimental baseada em OCR tradicional e ajustada ao encarte de amostra.
 
 A estratégia ativa é escolhida por configuração, sem alterar o controller ou o serviço:
 
@@ -88,7 +88,7 @@ flowchart TD
 - Java 25
 - Spring Boot 4.1.1
 - Maven
-- Spring Web MVC e Validation
+- Spring Web MVC
 - Docker e Docker Compose
 - Ollama
 - Qwen3-VL 4B Instruct
@@ -240,7 +240,7 @@ TABLOIDE_OLLAMA_MODEL: qwen3-vl:4b-instruct
 
 `localhost` não deve ser usado entre containers: `ollama` é o nome do serviço na rede interna do Compose.
 
-Para experimentar a estratégia tradicional:
+Para experimentar a estratégia Tesseract, atualmente ajustada às coordenadas do encarte de amostra:
 
 ```properties
 tabloide.extractor=tesseract

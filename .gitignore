@@ -37,3 +37,4 @@ build/
 .env
 mercadinho.db
 debug-*.png
+AGENTS.md

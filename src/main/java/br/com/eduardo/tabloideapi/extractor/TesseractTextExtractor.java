@@ -5,21 +5,16 @@ import br.com.eduardo.tabloideapi.dto.OcrWord;
 import br.com.eduardo.tabloideapi.image.ImagePreprocessor;
 import br.com.eduardo.tabloideapi.image.PriceImagePreprocessor;
 import net.sourceforge.tess4j.ITessAPI;
-import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.Word;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 
 @Component
-public class TesseractTextExtractor implements TextExtractor {
+public class TesseractTextExtractor {
 
     private final ImagePreprocessor imagePreprocessor;
     private final PriceImagePreprocessor priceImagePreprocessor;
@@ -31,7 +26,6 @@ public class TesseractTextExtractor implements TextExtractor {
         this.priceImagePreprocessor = priceImagePreprocessor;
     }
 
-    @Override
     public OcrResult extract(BufferedImage image) {
 
         try {
@@ -88,12 +82,6 @@ public class TesseractTextExtractor implements TextExtractor {
         try {
             BufferedImage processedImage =
                     priceImagePreprocessor.preprocess(image);
-
-            ImageIO.write(
-                    processedImage,
-                    "png",
-                    new File("debug-price.png")
-            );
 
             Tesseract tesseract = new Tesseract();
 
