@@ -1,0 +1,55 @@
+{
+  "info": {
+    "_postman_id": "b5de1a82-bf93-4ad3-8b8e-4435c0bd877b",
+    "name": "Tabloide Extractor API",
+    "description": "Requisições de exemplo para processar imagens de tabloides.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Processar tabloide",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "description": "Selecione uma imagem PNG ou JPEG do tabloide.",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/tabloides/processar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tabloides",
+            "processar"
+          ]
+        },
+        "description": "Envia uma imagem multipart e retorna as ofertas estruturadas."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ]
+}

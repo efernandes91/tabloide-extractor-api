@@ -14,6 +14,7 @@ API REST que recebe imagens de tabloides de supermercados e retorna ofertas estr
 - Ollama com `qwen3-vl:4b-instruct`;
 - Tess4J/Tesseract para a alternativa de OCR;
 - JUnit 5 e AssertJ para testes.
+- Docker e Docker Compose para o ambiente reproduzível.
 
 ## Convenções
 
@@ -25,6 +26,7 @@ API REST que recebe imagens de tabloides de supermercados e retorna ofertas estr
 - incluir testes unitários ao alterar sanitização, deduplicação ou normalização;
 - não registrar imagens em Base64 nos logs;
 - manter prompts e schemas compatíveis com respostas JSON estruturadas.
+- manter `compose.yaml` funcional em CPU, sem exigir GPU.
 
 ## Verificação
 

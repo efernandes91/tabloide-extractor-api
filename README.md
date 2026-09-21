@@ -89,49 +89,78 @@ flowchart TD
 - Spring Boot 4.1.1
 - Maven
 - Spring Web MVC e Validation
+- Docker e Docker Compose
 - Ollama
 - Qwen3-VL 4B Instruct
 - Tess4J/Tesseract como estratégia alternativa
 - JUnit 5 e AssertJ
 
-## Pré-requisitos
+## Execução rápida com Docker Compose
 
-- JDK 25
-- Maven 3.9 ou superior
-- [Ollama](https://ollama.com/) instalado
-- Modelo multimodal local:
+Este é o modo recomendado para testar o projeto. É necessário apenas ter o Docker Desktop ou Docker Engine com Compose instalado; Java, Maven e Ollama ficam dentro dos containers. Reserve aproximadamente 12 GB de espaço livre para imagens, dependências e o modelo.
+
+```powershell
+git clone https://github.com/efernandes91/tabloide-extractor-api.git
+cd tabloide-extractor-api
+docker compose up --build
+```
+
+O Compose executa automaticamente estas etapas:
+
+1. inicia o Ollama;
+2. baixa o modelo `qwen3-vl:4b-instruct`;
+3. compila a API com Java 25;
+4. inicia o Spring Boot somente quando o modelo está disponível.
+
+Na primeira execução são baixadas as imagens Docker e alguns gigabytes do modelo. O processo pode demorar, mas o modelo fica salvo no volume `ollama-data` e não precisa ser baixado novamente nas próximas inicializações.
+
+Quando aparecer `Tomcat started on port 8080`, a API estará disponível em `http://localhost:8080`.
+
+Comandos úteis:
+
+```powershell
+# Acompanhar a preparação do modelo e a API
+docker compose logs -f ollama-model-pull api
+
+# Ver os serviços
+docker compose ps
+
+# Ver o modelo durante uma inferência
+docker compose exec ollama ollama ps
+
+# Encerrar, preservando o modelo baixado
+docker compose down
+```
+
+Para apagar também o modelo e liberar o espaço do volume:
+
+```powershell
+docker compose down -v
+```
+
+> No Windows com GPU AMD, o container normalmente executará o modelo pela CPU. O resultado continua funcional, mas cada imagem pode levar vários minutos. Recomenda-se disponibilizar ao menos 8 GB de memória para o Docker Desktop.
+
+## Execução local para desenvolvimento
+
+Para executar sem containers, instale JDK 25, Maven 3.9+, [Ollama](https://ollama.com/) e o modelo:
 
 ```powershell
 ollama pull qwen3-vl:4b-instruct
-```
-
-Confira se o modelo foi instalado:
-
-```powershell
 ollama list
-```
-
-## Como executar
-
-Inicie a API dentro da pasta do projeto:
-
-```powershell
 mvn spring-boot:run
 ```
 
-Quando o terminal informar que o Tomcat iniciou na porta 8080, envie uma imagem em outro PowerShell:
+Nesse modo, a API usa o Ollama em `http://localhost:11434`. Para observar o modelo durante uma inferência, execute `ollama ps` em outro terminal.
+
+## Teste rápido com cURL
+
+Com a API pronta, execute dentro da pasta do projeto:
 
 ```powershell
-curl.exe -X POST "http://localhost:8080/api/v1/tabloides/processar" -H "Accept: application/json" -F "file=@C:\workspace\tabloide-api\samples\tabloide.png"
+curl.exe -X POST "http://localhost:8080/api/v1/tabloides/processar" -H "Accept: application/json" -F "file=@samples/tabloide.png"
 ```
 
-O primeiro processamento pode levar alguns minutos em uma máquina sem GPU dedicada. A API registra no console o progresso da leitura do cabeçalho e das regiões da imagem.
-
-Para observar o modelo carregado durante a execução:
-
-```powershell
-ollama ps
-```
+O terminal da API mostra o progresso da leitura do cabeçalho e das regiões do tabloide.
 
 ## Endpoint
 
@@ -145,6 +174,20 @@ Content-Type: multipart/form-data
 | Campo | Tipo | Obrigatório | Descrição |
 |---|---|---:|---|
 | `file` | arquivo | sim | Imagem PNG ou JPEG do tabloide |
+
+### Testar com Postman
+
+Uma coleção pronta está disponível em [`postman/Tabloide-Extractor-API.postman_collection.json`](postman/Tabloide-Extractor-API.postman_collection.json). Importe o arquivo no Postman, abra **Processar tabloide**, selecione a imagem no campo `file` e clique em **Send**.
+
+Para configurar manualmente:
+
+1. Crie uma requisição `POST` para `http://localhost:8080/api/v1/tabloides/processar`.
+2. Em **Headers**, adicione `Accept` com o valor `application/json`.
+3. Em **Body**, selecione **form-data**.
+4. Crie a chave `file`, altere seu tipo de **Text** para **File** e escolha uma imagem PNG ou JPEG.
+5. Clique em **Send** e aguarde o processamento.
+
+Não adicione o cabeçalho `Content-Type` manualmente. O Postman gera o `multipart/form-data` com o `boundary` correto. Como a inferência em CPU pode levar vários minutos, configure **Request timeout in ms** como `600000` ou `0` em **Settings > General**.
 
 Exemplo resumido de resposta:
 
@@ -187,6 +230,15 @@ tabloide.image.header-ratio=0.20
 tabloide.image.body-tiles=2
 tabloide.image.tile-overlap=0.12
 ```
+
+No Compose, as propriedades principais são sobrescritas por variáveis de ambiente:
+
+```yaml
+TABLOIDE_OLLAMA_BASE_URL: http://ollama:11434
+TABLOIDE_OLLAMA_MODEL: qwen3-vl:4b-instruct
+```
+
+`localhost` não deve ser usado entre containers: `ollama` é o nome do serviço na rede interna do Compose.
 
 Para experimentar a estratégia tradicional:
 
