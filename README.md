@@ -1,0 +1,1 @@
+# tabloide-extractor-api
